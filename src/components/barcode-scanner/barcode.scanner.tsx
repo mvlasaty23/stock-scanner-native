@@ -1,8 +1,9 @@
 import { BarCodeScanningResult, Camera } from 'expo-camera';
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Button, Modal, Portal } from 'react-native-paper';
 import { Actions } from 'react-native-router-flux';
+import { bookByBarcode$ } from '../../service/booking.service';
 
 export default function BarcodeScanner() {
   const [visible, setVisible] = useState(false);
@@ -23,11 +24,21 @@ export default function BarcodeScanner() {
   const onDismiss = () => {
     setVisible(false);
     cameraRef.current?.resumePreview();
-  }
+  };
   const onSend = () => {
     setVisible(false);
-    Actions.bookingSuccess({barcodeType, barcode});
-  }
+    // TODO: add API call - resolve productGroup, amount, uom of EAN or route to manual booking
+    bookByBarcode$(barcode).subscribe(
+      ({ productGroup, amount, uom, unknownBarcode }) => {
+        if (unknownBarcode) {
+          Actions.manualBooking({ barcode });
+        } else {
+          Actions.bookingSuccess({ productGroup, amount, uom });
+        }
+      },
+      (error) => Alert.alert(`Unexpected error occured: ${error}`)
+    );
+  };
 
   useEffect(() => {
     (async () => {
@@ -48,14 +59,25 @@ export default function BarcodeScanner() {
       <Portal>
         {/* TODO: Overthink this modal, does it really need another click? */}
         <Modal visible={visible} onDismiss={hideModal} contentContainerStyle={styles.modalContainer}>
-          <Text>{barcodeType}: {barcode}</Text>
+          <Text>
+            {barcodeType}: {barcode}
+          </Text>
           <View style={styles.modalButtonBar}>
-            <Button mode="contained" style={styles.button} onPress={onDismiss}>Dissmiss</Button>
-            <Button mode="contained" style={styles.button} onPress={onSend} >Send</Button>
+            <Button mode="contained" style={styles.button} onPress={onDismiss}>
+              Dissmiss
+            </Button>
+            <Button mode="contained" style={styles.button} onPress={onSend}>
+              Send
+            </Button>
           </View>
         </Modal>
       </Portal>
-      <Camera ref={cameraRef} style={styles.camera} type={Camera.Constants.Type.back} onBarCodeScanned={onBarCodeRead} />
+      <Camera
+        ref={cameraRef}
+        style={styles.camera}
+        type={Camera.Constants.Type.back}
+        onBarCodeScanned={onBarCodeRead}
+      />
     </View>
   );
 }
@@ -75,7 +97,7 @@ const styles = StyleSheet.create({
   },
   modalButtonBar: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   button: {
     flex: 1,

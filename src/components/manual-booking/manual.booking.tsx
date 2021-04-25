@@ -2,27 +2,58 @@ import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, StyleSheet, Text, View } from 'react-native';
 import { Button, TextInput } from 'react-native-paper';
 import { Actions } from 'react-native-router-flux';
+import { bookManually$ } from '../../service/booking.service';
 
-export function ManualBooking() {
+interface ManualBookingProps {
+  barcode?: string;
+}
+
+export function ManualBooking(props: ManualBookingProps) {
   const [productGroup, setProductGroup] = useState('');
-  const [productGroupSuggestions, setProductGroupSuggestions] = useState<string[]>([]);
-  const productGroups = ['Milk', 'Milo', 'Mila', 'Mile', 'Flour'];
-  const findProductGroup = (query: string) => {
-    setProductGroup(query);
-    if (query.length > 2) {
-      const regex = new RegExp(`${query.trim()}`, 'i');
-      setProductGroupSuggestions(productGroups.filter((group) => group.search(regex) >= 0));
-    } else {
-      setProductGroupSuggestions([]);
-    }
-  };
-
+  const [productGroupError, setProductGroupError] = useState(false);
   const [amount, setAmount] = useState('');
+  const [amountError, setAmountError] = useState(false);
   const [uom, setUom] = useState('');
+  const [uomError, setUomError] = useState(false);
+
+  function inputsHaveErrors(amountAsNum: number) {
+    let hasErrors = false;
+    if (!productGroup) {
+      setProductGroupError(true);
+      hasErrors = true;
+    } else {
+      setProductGroupError(false);
+    }
+    if (Number.isNaN(amountAsNum)) {
+      setAmountError(true);
+      hasErrors = true;
+    } else {
+      setAmountError(false);
+    }
+    if (!uom) {
+      setUomError(true);
+      hasErrors = true;
+    } else {
+      setUomError(false);
+    }
+    return hasErrors;
+  }
+
+  function onSend() {
+    const amountAsNum = Number.parseFloat(amount.replace(',', '.'));
+    if (inputsHaveErrors(amountAsNum)) {
+      return;
+    }
+    bookManually$(productGroup, amountAsNum, uom, props.barcode).subscribe(
+      ({ productGroup, amount, uom }) => Actions.bookingSuccess({ productGroup, amount, uom }),
+      (error) => Alert.alert(`Unexpected error occured: ${error}`)
+    );
+  }
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior="height">
       <Text style={styles.title}>Manual Booking</Text>
+      {!!props.barcode && <Text>{props.barcode}</Text>}
       <View style={styles.containerRow}>
         <TextInput
           label="Product"
@@ -33,6 +64,7 @@ export function ManualBooking() {
           defaultValue={productGroup}
           value={productGroup}
           onChangeText={setProductGroup}
+          error={productGroupError}
         />
       </View>
       <View style={styles.containerRow}>
@@ -44,6 +76,7 @@ export function ManualBooking() {
           value={amount}
           label="Amount"
           multiline={false}
+          error={amountError}
         />
         <TextInput
           autoCompleteType="off"
@@ -53,10 +86,11 @@ export function ManualBooking() {
           value={uom}
           label="UOM"
           multiline={false}
+          error={uomError}
         />
       </View>
       <View style={styles.container}>
-        <Button mode="contained" onPress={() => Actions.bookingSuccess({productGroup, amount, uom})} style={styles.button}>
+        <Button mode="contained" onPress={onSend} style={styles.button}>
           Send
         </Button>
       </View>
